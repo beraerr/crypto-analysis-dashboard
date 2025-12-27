@@ -27,11 +27,40 @@ pip install -r requirements_crypto.txt
 ```
 
 2. Run the application:
+
+**Option 1: Using run.py (Recommended)**
 ```bash
-streamlit run crypto_prediction_app.py
+python run.py
+```
+
+**Option 2: Direct Streamlit**
+```bash
+streamlit run src/app.py
+```
+
+**Option 3: Install as package**
+```bash
+pip install -e .
+crypto-dashboard
 ```
 
 The application will open in your browser at `http://localhost:8501`
+
+## Project Structure
+
+The project follows a clean, modular architecture:
+
+```
+src/
+├── app.py              # Main Streamlit application
+├── models/             # AI prediction and sentiment models
+├── data/               # Data fetching and processing
+├── indicators/         # Technical indicators
+├── ui/                 # UI components
+└── utils/              # Utilities and configuration
+```
+
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for detailed architecture documentation.
 
 ## Usage
 
