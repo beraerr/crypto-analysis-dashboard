@@ -4,12 +4,20 @@ A comprehensive web application for cryptocurrency price analysis, technical ind
 
 ## Features
 
-- Real-time price data from Yahoo Finance
-- Technical indicators: RSI, SMA, MACD, Bollinger Bands
-- Price prediction using linear regression
-- News sentiment analysis from Google News (English & Turkish)
-- Crypto Fear & Greed Index integration
-- Interactive charts with Plotly
+- **Real-time price data** from Yahoo Finance
+- **Technical indicators**: RSI, SMA, MACD, Bollinger Bands
+- **🤖 Advanced AI Price Prediction**:
+  - LSTM (Long Short-Term Memory) - Captures long-term dependencies
+  - GRU (Gated Recurrent Unit) - Lightweight and efficient
+  - Transformer - Attention-based model for long-range patterns
+  - Hybrid Transformer-GRU - State-of-the-art combination
+  - Ensemble Model - Combines all models for best accuracy
+- **🧠 Advanced Sentiment Analysis**:
+  - FinBERT - Financial domain-specific BERT model
+  - Multi-source sentiment fusion with weighted scoring
+  - News sentiment analysis from Google News (English & Turkish)
+- **Crypto Fear & Greed Index** integration
+- **Interactive charts** with Plotly
 
 ## Installation
 
@@ -36,14 +44,17 @@ The application will open in your browser at `http://localhost:8501`
 ## Technical Details
 
 ### Technologies Used
-- Streamlit - Web interface
-- YFinance - Financial data fetching
-- Pandas - Data processing
-- Plotly - Interactive charts
-- Scikit-learn - Machine learning (prediction model)
-- TextBlob - Sentiment analysis
-- PyGoogleNews - News fetching
-- NLTK - Natural language processing
+- **Streamlit** - Web interface
+- **YFinance** - Financial data fetching
+- **Pandas** - Data processing
+- **Plotly** - Interactive charts
+- **PyTorch** - Deep learning framework (LSTM, GRU models)
+- **TensorFlow/Keras** - Deep learning framework (Transformer, Hybrid models)
+- **Transformers (HuggingFace)** - FinBERT for financial sentiment analysis
+- **Scikit-learn** - Machine learning utilities
+- **TextBlob** - Fallback sentiment analysis
+- **PyGoogleNews** - News fetching
+- **NLTK** - Natural language processing
 
 ### Technical Indicators
 - **RSI**: 14-day default period (adjustable)
@@ -58,8 +69,43 @@ The application will open in your browser at `http://localhost:8501`
   - MACD > Signal: Bullish signal
   - MACD < Signal: Bearish signal
 
-### Prediction Model
-The application uses a simple Linear Regression model based on the last 30 days of price data to predict future prices. This model is for educational purposes and does not guarantee actual market movements.
+### AI Prediction Models
+
+The application now includes **state-of-the-art deep learning models** for cryptocurrency price prediction:
+
+1. **LSTM (Long Short-Term Memory)**
+   - Captures long-term dependencies in price sequences
+   - Uses 60-day lookback window
+   - Multi-layer architecture with dropout regularization
+
+2. **GRU (Gated Recurrent Unit)**
+   - Lighter alternative to LSTM
+   - Faster training while maintaining good performance
+   - Effective for volatile markets
+
+3. **Transformer Model**
+   - Attention mechanism captures long-range dependencies
+   - Better understanding of price patterns across time
+   - Multi-head attention for complex pattern recognition
+
+4. **Hybrid Transformer-GRU**
+   - Combines Transformer's attention with GRU's sequential processing
+   - State-of-the-art approach from recent research
+   - Best balance of accuracy and efficiency
+
+5. **Ensemble Model**
+   - Combines predictions from all models
+   - Weighted averaging for optimal results
+   - Most robust and accurate predictions
+
+**Note:** All models use multiple features (Close, High, Low, Volume) and are trained on historical data. Models are for educational purposes and do not guarantee actual market movements.
+
+### Advanced Sentiment Analysis
+
+- **FinBERT**: Financial domain-specific BERT model fine-tuned on financial texts
+- **Multi-source weighting**: Different weights for trusted sources (Reuters, Bloomberg, etc.)
+- **Temporal weighting**: Recent news weighted more heavily
+- **BiLSTM support**: Can be extended with BiLSTM for sequential sentiment processing
 
 ## Disclaimer
 

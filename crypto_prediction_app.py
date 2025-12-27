@@ -18,6 +18,21 @@ from pygooglenews import GoogleNews
 import time
 warnings.filterwarnings('ignore')
 
+# Import advanced AI models
+try:
+    from ai_models import LSTMPredictor, GRUPredictor, TransformerPredictor, HybridTransformerGRU, EnsemblePredictor
+    AI_MODELS_AVAILABLE = True
+except ImportError:
+    AI_MODELS_AVAILABLE = False
+    st.warning("⚠️ Advanced AI models not available. Install dependencies: pip install torch tensorflow transformers")
+
+# Import advanced sentiment analysis
+try:
+    from sentiment_ai import MultiSourceSentimentAnalyzer, get_sentiment_analyzer
+    ADVANCED_SENTIMENT_AVAILABLE = True
+except ImportError:
+    ADVANCED_SENTIMENT_AVAILABLE = False
+
 # TextBlob için NLTK verilerini kontrol et ve indir
 try:
     from textblob.download_corpora import download_all
@@ -138,9 +153,42 @@ st.sidebar.subheader("Prediction Settings")
 enable_prediction = st.sidebar.checkbox("Enable Price Prediction", value=True)
 prediction_days = st.sidebar.slider("Prediction Days", 3, 14, 7, disabled=not enable_prediction)
 
+# AI Model Selection
+if AI_MODELS_AVAILABLE and enable_prediction:
+    st.sidebar.subheader("🤖 AI Model Selection")
+    model_type = st.sidebar.selectbox(
+        "Prediction Model:",
+        options=[
+            "Simple Linear Regression",
+            "LSTM (Long Short-Term Memory)",
+            "GRU (Gated Recurrent Unit)",
+            "Transformer",
+            "Hybrid Transformer-GRU",
+            "Ensemble (All Models)"
+        ],
+        index=5 if AI_MODELS_AVAILABLE else 0,
+        disabled=not AI_MODELS_AVAILABLE
+    )
+    
+    if "Ensemble" in model_type:
+        use_ensemble = True
+    else:
+        use_ensemble = False
+        selected_model_type = model_type.lower()
+else:
+    model_type = "Simple Linear Regression"
+    use_ensemble = False
+
 st.sidebar.subheader("Sentiment Analysis")
 enable_sentiment = st.sidebar.checkbox("Enable News Analysis", value=True)
 news_count = st.sidebar.slider("Number of Articles", 5, 20, 10, disabled=not enable_sentiment)
+
+# Advanced Sentiment Analysis Option
+if ADVANCED_SENTIMENT_AVAILABLE and enable_sentiment:
+    use_finbert = st.sidebar.checkbox("Use FinBERT (Advanced AI)", value=True, 
+                                      help="Uses financial domain-specific BERT model for better sentiment analysis")
+else:
+    use_finbert = False
 
 @st.cache_data(ttl=300)
 def fetch_crypto_data(symbol, period):
@@ -190,7 +238,6 @@ def calculate_bollinger_bands(data, period=20, std_dev=2):
 
 # ==================== SENTIMENT ANALYSIS FUNCTIONS ====================
 
-SOURCE_WEIGHTS = {
 SOURCE_WEIGHTS = {
     'reuters': 1.5,
     'bloomberg': 1.5,
@@ -312,8 +359,34 @@ def fetch_crypto_news(crypto_name, max_articles=10):
             st.warning(f"Error fetching news: {str(e)}")
             return []
 
-def analyze_sentiment(text):
-    """Perform sentiment analysis using TextBlob"""
+# Initialize advanced sentiment analyzer if available
+if ADVANCED_SENTIMENT_AVAILABLE:
+    try:
+        advanced_sentiment_analyzer = get_sentiment_analyzer(use_finbert=True)
+    except:
+        advanced_sentiment_analyzer = None
+else:
+    advanced_sentiment_analyzer = None
+
+def analyze_sentiment(text, use_advanced=None):
+    """Perform sentiment analysis using FinBERT or TextBlob"""
+    if use_advanced is None:
+        use_advanced = use_finbert if 'use_finbert' in globals() else False
+    
+    # Try advanced sentiment if available and requested
+    if use_advanced and advanced_sentiment_analyzer:
+        try:
+            result = advanced_sentiment_analyzer.analyze_text(text)
+            return {
+                'polarity': result.get('polarity', 0.0),
+                'subjectivity': 0.0,  # FinBERT doesn't provide subjectivity
+                'sentiment': result.get('sentiment', 'nötr'),
+                'score': result.get('score', 0.0)
+            }
+        except Exception as e:
+            st.warning(f"Advanced sentiment analysis failed: {str(e)}. Falling back to TextBlob.")
+    
+    # Fallback to TextBlob
     try:
         blob = TextBlob(text)
         polarity = blob.sentiment.polarity  # -1 (negatif) ile +1 (pozitif) arası
@@ -322,17 +395,19 @@ def analyze_sentiment(text):
         return {
             'polarity': polarity,
             'subjectivity': subjectivity,
-            'sentiment': 'pozitif' if polarity > 0.1 else 'negatif' if polarity < -0.1 else 'nötr'
+            'sentiment': 'pozitif' if polarity > 0.1 else 'negatif' if polarity < -0.1 else 'nötr',
+            'score': abs(polarity)
         }
     except:
         return {
             'polarity': 0.0,
             'subjectivity': 0.0,
-            'sentiment': 'nötr'
+            'sentiment': 'nötr',
+            'score': 0.0
         }
 
 def analyze_news_sentiment(news_list):
-    """Analyze sentiment of news list"""
+    """Analyze sentiment of news list using advanced AI or TextBlob"""
     if not news_list:
         return {
             'overall_sentiment': 'nötr',
@@ -344,6 +419,14 @@ def analyze_news_sentiment(news_list):
             'message': 'Haber bulunamadı'
         }
     
+    # Use advanced sentiment analyzer if available
+    if use_finbert and advanced_sentiment_analyzer:
+        try:
+            return advanced_sentiment_analyzer.analyze_news_list(news_list)
+        except Exception as e:
+            st.warning(f"Advanced sentiment analysis failed: {str(e)}. Using TextBlob fallback.")
+    
+    # Fallback to original TextBlob method
     total_score = 0.0
     weighted_score = 0.0
     total_weight = 0.0
@@ -352,7 +435,7 @@ def analyze_news_sentiment(news_list):
     for news in news_list:
         # Başlık ve özeti birleştir
         text = f"{news['title']} {news.get('summary', '')}"
-        sentiment_data = analyze_sentiment(text)
+        sentiment_data = analyze_sentiment(text, use_advanced=False)
         
         polarity = sentiment_data['polarity']
         weight = news.get('weight', 1.0)
@@ -473,6 +556,72 @@ def simple_price_prediction(data, days=7):
     
     return future_dates, predictions
 
+@st.cache_resource
+def get_ai_predictor(model_type, data):
+    """Get and train AI predictor model"""
+    if not AI_MODELS_AVAILABLE:
+        return None
+    
+    try:
+        if "lstm" in model_type.lower():
+            predictor = LSTMPredictor(sequence_length=60, hidden_units=50, num_layers=2)
+        elif "gru" in model_type.lower():
+            predictor = GRUPredictor(sequence_length=60, hidden_units=50, num_layers=2)
+        elif "transformer" in model_type.lower() and "hybrid" not in model_type.lower():
+            predictor = TransformerPredictor(sequence_length=60, d_model=64, num_heads=4)
+        elif "hybrid" in model_type.lower():
+            predictor = HybridTransformerGRU(sequence_length=60, d_model=64, gru_units=50)
+        else:
+            return None
+        
+        # Train the model (with reduced epochs for faster response)
+        predictor.train(data, epochs=20, batch_size=32, validation_split=0.2)
+        return predictor
+    except Exception as e:
+        st.error(f"Error training {model_type}: {str(e)}")
+        return None
+
+@st.cache_resource
+def get_ensemble_predictor(data):
+    """Get and train ensemble predictor"""
+    if not AI_MODELS_AVAILABLE:
+        return None
+    
+    try:
+        ensemble = EnsemblePredictor()
+        
+        # Add multiple models
+        ensemble.add_model(LSTMPredictor(sequence_length=60, hidden_units=50, num_layers=2), weight=1.0)
+        ensemble.add_model(GRUPredictor(sequence_length=60, hidden_units=50, num_layers=2), weight=1.0)
+        ensemble.add_model(TransformerPredictor(sequence_length=60, d_model=64, num_heads=4), weight=1.2)
+        ensemble.add_model(HybridTransformerGRU(sequence_length=60, d_model=64, gru_units=50), weight=1.5)
+        
+        # Train ensemble
+        ensemble.train(data, epochs=15, batch_size=32)
+        return ensemble
+    except Exception as e:
+        st.error(f"Error training ensemble: {str(e)}")
+        return None
+
+def advanced_price_prediction(data, days=7, model_type="Ensemble"):
+    """Advanced AI-based price prediction"""
+    if not AI_MODELS_AVAILABLE:
+        return None, None
+    
+    try:
+        if "Ensemble" in model_type or "ensemble" in model_type.lower():
+            predictor = get_ensemble_predictor(data)
+            if predictor:
+                return predictor.predict(data, days)
+        else:
+            predictor = get_ai_predictor(model_type, data)
+            if predictor:
+                return predictor.predict(data, days)
+    except Exception as e:
+        st.error(f"Prediction error: {str(e)}")
+    
+    return None, None
+
 if st.sidebar.button("Refresh Data", type="primary"):
     st.cache_data.clear()
 
@@ -580,13 +729,23 @@ if show_bollinger:
 
 # Fiyat tahmini
 if enable_prediction:
-    future_dates, predictions = simple_price_prediction(data, prediction_days)
-    fig.add_trace(
-        go.Scatter(x=future_dates, y=predictions, name='Tahmin', 
-                  line=dict(color='green', width=2, dash='dot'),
-                  mode='lines+markers'),
-        row=1, col=1
-    )
+    if AI_MODELS_AVAILABLE and model_type != "Simple Linear Regression":
+        with st.spinner(f"Training {model_type} model... This may take a moment."):
+            future_dates, predictions = advanced_price_prediction(data, prediction_days, model_type)
+            if future_dates is None or predictions is None:
+                # Fallback to simple prediction
+                future_dates, predictions = simple_price_prediction(data, prediction_days)
+                st.info(f"⚠️ {model_type} model unavailable. Using simple linear regression.")
+    else:
+        future_dates, predictions = simple_price_prediction(data, prediction_days)
+    
+    if future_dates is not None and predictions is not None:
+        fig.add_trace(
+            go.Scatter(x=future_dates, y=predictions, name=f'Prediction ({model_type})', 
+                      line=dict(color='green', width=2, dash='dot'),
+                      mode='lines+markers'),
+            row=1, col=1
+        )
 
 # 2. RSI
 if show_rsi:
@@ -788,7 +947,7 @@ if enable_sentiment:
         
         for i, news in enumerate(news_list[:news_count], 1):
             news_text = f"{news['title']} {news.get('summary', '')}"
-            news_sentiment = analyze_sentiment(news_text)
+            news_sentiment = analyze_sentiment(news_text, use_advanced=use_finbert if 'use_finbert' in globals() else False)
             
             if news_sentiment['polarity'] > 0.1:
                 border_color = "4px solid #28a745"
@@ -853,18 +1012,43 @@ if enable_sentiment:
 
 if enable_prediction:
     st.subheader("Price Prediction")
-    future_dates, predictions = simple_price_prediction(data, prediction_days)
     
-    pred_df = pd.DataFrame({
-        'Date': future_dates,
-        'Predicted Price': predictions
-    })
+    # Get predictions based on selected model
+    if AI_MODELS_AVAILABLE and model_type != "Simple Linear Regression":
+        with st.spinner(f"Generating predictions using {model_type}..."):
+            future_dates, predictions = advanced_price_prediction(data, prediction_days, model_type)
+            if future_dates is None or predictions is None:
+                # Fallback
+                future_dates, predictions = simple_price_prediction(data, prediction_days)
+                model_display = "Simple Linear Regression (Fallback)"
+            else:
+                model_display = model_type
+    else:
+        future_dates, predictions = simple_price_prediction(data, prediction_days)
+        model_display = "Simple Linear Regression"
     
-    st.dataframe(pred_df.style.format({
-        'Predicted Price': '${:,.2f}'
-    }), use_container_width=True)
-    
-    st.warning("These predictions are based on a simple linear regression model and do not guarantee actual price movements. Past performance does not guarantee future results.")
+    if future_dates is not None and predictions is not None:
+        pred_df = pd.DataFrame({
+            'Date': future_dates,
+            'Predicted Price': predictions
+        })
+        
+        st.dataframe(pred_df.style.format({
+            'Predicted Price': '${:,.2f}'
+        }), use_container_width=True)
+        
+        # Show model info
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"🤖 **Model Used:** {model_display}")
+        with col2:
+            if len(predictions) > 0:
+                price_change = predictions[-1] - data['Close'].iloc[-1]
+                price_change_pct = (price_change / data['Close'].iloc[-1]) * 100
+                st.metric("Predicted Change", f"{price_change_pct:.2f}%", 
+                         delta=f"${price_change:,.2f}")
+        
+        st.warning("⚠️ These predictions are AI-generated estimates and do not guarantee actual price movements. Past performance does not guarantee future results. Always do your own research.")
 
 st.markdown("---")
 st.markdown("""

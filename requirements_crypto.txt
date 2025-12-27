@@ -10,3 +10,12 @@ requests>=2.31.0
 nltk>=3.8.1
 pygooglenews>=0.1.2
 
+# Deep Learning Libraries
+torch>=2.0.0
+tensorflow>=2.13.0
+
+# Transformers for FinBERT
+transformers>=4.30.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0
+
