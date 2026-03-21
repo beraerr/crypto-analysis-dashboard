@@ -163,3 +163,6 @@ class TechnicalIndicators:
                 'message': 'Bearish signal - MACD below Signal'
             }
 
+
+
+

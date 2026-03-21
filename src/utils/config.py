@@ -96,3 +96,6 @@ class AppConfig:
 # Global configuration instance
 config = AppConfig.from_env()
 
+
+
+
